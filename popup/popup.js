@@ -1,23 +1,36 @@
 /* eslint no-undef: "off" */
-const urlList = document.getElementById('url-list')
-const port = chrome.runtime.connect({ name: 'port' })
+const urlListElement = document.getElementById('url-list')
+const backgroundPort = chrome.runtime.connect({ name: 'popupPort' })
+const clearBtn = document.getElementById('clear-btn')
+
+let currentTabId = null
 
 ;(async function () {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (!tab) return
-  port.postMessage({ tabId: tab.id })
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!activeTab) return
+  currentTabId = activeTab.id
+  backgroundPort.postMessage({ action: 'get', requestedTabId: activeTab.id })
 })()
 
-port.onMessage.addListener(function (urls) {
-  if (urls.length === 0) {
+clearBtn.addEventListener('click', function () {
+  urlListElement.innerHTML = ''
+  backgroundPort.postMessage({ action: 'clear', requestedTabId: currentTabId })
+  clearBtn.disabled = true
+})
+
+backgroundPort.onMessage.addListener(function (tabStreams) {
+  if (tabStreams.length === 0) {
     const h3 = document.createElement('h3')
     h3.textContent = 'No files 😢'
     document.getElementsByTagName('body')[0].appendChild(h3)
     return
   }
-  urls[0].files.forEach(url => {
+  clearBtn.disabled = false
+
+  tabStreams[0].files.forEach(({ streamType, streamUrl }) => {
     const listItem = document.createElement('li')
     const paragraph = document.createElement('p')
+    const badge = document.createElement('span')
     const button = document.createElement('button')
     button.textContent = 'Copy'
 
@@ -35,9 +48,12 @@ port.onMessage.addListener(function (urls) {
       }
     })
 
-    paragraph.textContent = url
+    paragraph.textContent = streamUrl
+    badge.textContent = streamType.toUpperCase()
+    badge.className = `badge ${streamType}`
     listItem.appendChild(paragraph)
+    listItem.appendChild(badge)
     listItem.appendChild(button)
-    urlList.appendChild(listItem)
+    urlListElement.appendChild(listItem)
   })
 })

@@ -1,33 +1,51 @@
 /* eslint no-undef: "off" */
-const regex = /(https?:\/\/[^\s]+\.m3u8(?:\?[^\s]*)?)/g
-const dataList = []
+const m3u8UrlRegex = /(https?:\/\/[^\s]+\.m3u8(?:\?[^\s]*)?)/g
+const capturedStreams = []
 
-function addToList (url, tabId) {
-  const tabObj = dataList.find(item => item.tabId === tabId)
-  if (tabObj) {
-    if (tabObj.files.length >= 10) tabObj.files.length = 0
-    tabObj.files.push(url)
+function addToList (streamUrl, tabId, streamType) {
+  const existingTabData = capturedStreams.find(item => item.tabId === tabId)
+  if (existingTabData) {
+    if (existingTabData.files.length >= 10) existingTabData.files.length = 0
+    existingTabData.files.push({ streamType, streamUrl })
   } else {
-    dataList.push({
+    capturedStreams.push({
       tabId,
-      files: [url]
+      files: [{ streamType, streamUrl }]
     })
   }
-  chrome.action.setBadgeText({ text: `${dataList.filter(item => item.tabId === tabId)[0].files.length}`, tabId })
-  chrome.action.setBadgeBackgroundColor({ color: 'green', tabId })
+
+  const currentTabData = capturedStreams.find(item => item.tabId === tabId)
+  if (currentTabData) {
+    chrome.action.setBadgeText({ text: `${currentTabData.files.length}`, tabId })
+    chrome.action.setBadgeBackgroundColor({ color: 'green', tabId })
+  }
 }
 
-chrome.runtime.onConnect.addListener(function (port) {
-  port.onMessage.addListener(function ({ tabId }) {
-    port.postMessage(dataList.filter(item => item.tabId === tabId))
+chrome.runtime.onConnect.addListener(function (popupPort) {
+  popupPort.onMessage.addListener(function ({ requestedTabId, action }) {
+    if (action === 'get') {
+      popupPort.postMessage(capturedStreams.filter(item => item.tabId === requestedTabId))
+    } else if (action === 'clear') {
+      const index = capturedStreams.findIndex(item => item.tabId === requestedTabId)
+      if (index !== -1) capturedStreams[index].files = []
+      chrome.action.setBadgeText({ text: '', tabId: requestedTabId })
+    }
   })
 })
 
-chrome.webRequest.onBeforeRequest.addListener(async function (details) {
-  if (!details.url.match(regex)) return
+chrome.webRequest.onBeforeRequest.addListener(async function (requestDetails) {
+  if (!requestDetails.url.match(m3u8UrlRegex)) return
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (!tab || tab.id !== details.tabId) return
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!activeTab || activeTab.id !== requestDetails.tabId) return
 
-  addToList(details.url, tab.id)
+  if (/^https:\/\/[^/]+\/api\/channel\/hls\/[^/]+\.m3u8(\?.*)?$/.test(requestDetails.url)) {
+    addToList(requestDetails.url, activeTab.id, 'live')
+  } else if (/^https:\/\/[^/]+\/vod\/\d+\.m3u8(\?.*)?$/.test(requestDetails.url)) {
+    addToList(requestDetails.url, activeTab.id, 'vod')
+  } else if (/^https:\/\/.+\/hls\/master\.m3u8(\?.*)?$/.test(requestDetails.url)) {
+    addToList(requestDetails.url, activeTab.id, 'vod')
+  } else if (/^https:\/\/[^/]+\/api\/video\/.+\.m3u8(\?.*)?$/.test(requestDetails.url)) {
+    addToList(requestDetails.url, activeTab.id, 'live')
+  }
 }, { urls: ['<all_urls>'] })

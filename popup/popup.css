@@ -8,9 +8,13 @@
 body {
     background-color: #242424;
     padding: 10px;
-    min-width: 320px;
-    min-height: 90px;
-    color: #c1c2c4;
+    min-width: 300px;
+    color: #fff;
+}
+
+h2 {
+    margin-bottom: 10px;
+    text-align: center;
 }
 
 h3 {
@@ -36,16 +40,34 @@ li {
         width: 320px;
     }
 
+    .badge {
+        display: inline-block;
+        padding: 2px 6px;
+        margin-left: 6px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        color: white;
+    }
+
+    .badge.vod {
+        background-color: rgb(168, 1, 168);
+    }
+
+    .badge.live {
+        background-color: red;
+    }
+
     button {
         color: #f1f2f3;
-        padding: 5px 10px;
+        padding: 6px 12px;
         background-color: #007BFF;
         border: none;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
         display: flex;
         align-items: center;
-        width: 60px;
+        margin-left: 10px;
 
         &:hover {
             background-color: #007bffb6;
@@ -53,20 +75,18 @@ li {
     }
 }
 
-.footer-link {
-    position: absolute;
-    bottom: 10px;
-    width: 100%;
-    text-align: center;
+#clear-btn {
+    background-color: #dc3545;
+    color: white;
+    float: right;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin: 14px 0;
+    transition: background-color 0.3s ease;
+}
 
-    a {
-        text-decoration: none;
-        color: #0073e6;
-        font-size: 12px;
-        transition: color 0.3s;
-
-        &:hover {
-            color: #005bb5;
-        }
-    }
+#clear-btn:hover {
+    background-color: #c82333;
 }
