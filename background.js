@@ -1,12 +1,13 @@
 /* eslint no-undef: "off" */
-const m3u8UrlRegex = /(https?:\/\/[^\s]+\.m3u8(?:\?[^\s]*)?)/g
 const capturedStreams = []
 
 function addToList (streamUrl, tabId, streamType) {
   const existingTabData = capturedStreams.find(item => item.tabId === tabId)
   if (existingTabData) {
     if (existingTabData.files.length >= 10) existingTabData.files.length = 0
-    existingTabData.files.push({ streamType, streamUrl })
+    if (!existingTabData.files.some(file => file.streamUrl === streamUrl)) {
+      existingTabData.files.push({ streamType, streamUrl })
+    }
   } else {
     capturedStreams.push({
       tabId,
@@ -33,19 +34,33 @@ chrome.runtime.onConnect.addListener(function (popupPort) {
   })
 })
 
-chrome.webRequest.onBeforeRequest.addListener(async function (requestDetails) {
-  if (!requestDetails.url.match(m3u8UrlRegex)) return
+chrome.webRequest.onCompleted.addListener(async function (requestDetails) {
+  try {
+    if (!/\.m3u8([?#]|$)/.test(requestDetails.url)) return
 
-  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (!activeTab || activeTab.id !== requestDetails.tabId) return
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (!activeTab || activeTab.id !== requestDetails.tabId) return
 
-  if (/^https:\/\/[^/]+\/api\/channel\/hls\/[^/]+\.m3u8(\?.*)?$/.test(requestDetails.url)) {
-    addToList(requestDetails.url, activeTab.id, 'live')
-  } else if (/^https:\/\/[^/]+\/vod\/\d+\.m3u8(\?.*)?$/.test(requestDetails.url)) {
-    addToList(requestDetails.url, activeTab.id, 'vod')
-  } else if (/^https:\/\/.+\/hls\/master\.m3u8(\?.*)?$/.test(requestDetails.url)) {
-    addToList(requestDetails.url, activeTab.id, 'vod')
-  } else if (/^https:\/\/[^/]+\/api\/video\/.+\.m3u8(\?.*)?$/.test(requestDetails.url)) {
-    addToList(requestDetails.url, activeTab.id, 'live')
+    const url = new URL(requestDetails.url)
+    const initiator = requestDetails.initiator || ''
+
+    if (initiator?.includes('twitch.tv')) {
+      const token = url.searchParams.get('token')
+      if (token?.includes('web') && token?.includes('site')) {
+        addToList(requestDetails.url, activeTab.id, 'live')
+      } else if (token?.includes('vod_id')) {
+        addToList(requestDetails.url, activeTab.id, 'vod')
+      }
+    } else if (initiator?.includes('kick.com')) {
+      if (url.pathname?.includes('master')) {
+        addToList(requestDetails.url, activeTab.id, 'vod')
+      } else if (url.pathname.includes('video')) {
+        addToList(requestDetails.url, activeTab.id, 'live')
+      }
+    } else if (url.pathname?.includes('master')) {
+      addToList(requestDetails.url, activeTab.id, 'vod')
+    }
+  } catch (error) {
+    console.error('Error processing request:', error)
   }
 }, { urls: ['<all_urls>'] })
